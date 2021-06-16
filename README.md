@@ -26,7 +26,7 @@ In order to login, the username and password must be entered into a wealthsimple
 
 `ws=wealthsimple('email', 'password')`
 
-If 2FA is enabled, additional steps must be taken for the login process.
+If 2FA is enabled, additional steps must be taken for the login process. Go to Two-step verification settings in the wealthsimple app and switch to method to 'Use a dedicated app'. Take note of the code and it can be used to generate a totp_token.
 
 `ws=wealthsimple('email', 'password', MFA=authy.get_totp_token('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX='))`
 
