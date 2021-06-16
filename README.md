@@ -23,7 +23,12 @@ Import the module wealthsimple
 
 ### Login
 In order to login, the username and password must be entered into a wealthsimple object.
+
+`ws=wealthsimple('email', 'password')`
+
 If 2FA is enabled, additional steps must be taken for the login process.
+
+`ws=wealthsimple('email', 'password', MFA=authy.get_totp_token('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX='))`
 
 
 ### Trading
