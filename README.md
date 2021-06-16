@@ -16,12 +16,14 @@ To use this module, requests must be installed. This can be downloaded with the 
 ### Setup
 Make sure the wealthsimple and authy module is in PATH.
 Import the module wealthsimple
+
 `from weathsimple import wealthsimple`
+
 `import authy`
 
 ### Login
 In order to login, the username and password must be entered into a wealthsimple object.
-If 2FA is enabled, additional steps must be taken to ensure full functionality
+If 2FA is enabled, additional steps must be taken for the login process.
 
 
 ### Trading
