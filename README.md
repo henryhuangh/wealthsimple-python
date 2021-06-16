@@ -8,7 +8,7 @@ To use this module, requests must be installed. This can be downloaded with the 
 
 ## Features
 - Basic buy and sell functionality (Stop Limit, Limit, Market, Good till Cancel, Good for Day)
-- Real time quotes from TMX, NASDAQ and Yahoo
+- Built-in real time quotes support from TMX, NASDAQ and Yahoo
 - Balance retreival
 
 ## Documentation
