@@ -10,3 +10,20 @@ To use this module, requests must be installed. This can be downloaded with the 
 - Basic buy and sell functionality (Stop Limit, Limit, Market, Good till Cancel, Good for Day)
 - Real time quotes from TMX, NASDAQ and Yahoo
 - Balance retreival
+
+## Documentation
+
+### Setup
+Make sure the wealthsimple and authy module is in PATH.
+Import the module wealthsimple
+`from weathsimple import wealthsimple`
+`import authy`
+
+### Login
+In order to login, the username and password must be entered into a wealthsimple object.
+If 2FA is enabled, additional steps must be taken to ensure full functionality
+
+
+### Trading
+
+To place a trade, ensure that there is enough funds avaliable
