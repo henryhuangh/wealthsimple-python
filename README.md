@@ -33,4 +33,12 @@ If 2FA is enabled, additional steps must be taken for the login process. Go to T
 
 ### Trading
 
-To place a trade, ensure that there is enough funds avaliable
+To place a trade, ensure that there is enough funds avaliable, purchasing power can be retrieved by:
+
+`ws.balance(account_id)`
+
+The account id can be retrieved by calling
+
+`ws.accounts()`
+
+This will list out all the accounts associated with the login
