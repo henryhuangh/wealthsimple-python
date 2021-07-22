@@ -64,16 +64,18 @@ Stop Limit Sell | ws.stop_limit_sell(tick_id, quantity, price, stop_price, accou
 Stop Limit Buy | ws.stop_limit_buy(tick_id, quantity, price, stop_price, account_id) | tick_id, quantity, price, stop_price
 
 ##### Param Definitions
-tick_id: tick_id is a unique idenitifier for a particular stock, this parameter can be retrieved by calling the `tick_id` method
+**tick_id:** tick_id is a unique idenitifier for a particular stock, this parameter can be retrieved by calling the `tick_id` method
 Example: 
 ```python
 ticker_id=ws.tick_id('AAPL', 'NASDAQ')
 ```
 This will retrieve the the tick_id for AAPL INC. listed on NASDAQ
 
-quantity: This refers to the quantity of stock to purchase or sell
+**quantity:** This refers to the quantity of stock to purchase or sell
 
-price: This refers to the desired price to purchase or sell in a limit order. This price is usually better than market prices
+**price:** This refers to the desired price to purchase or sell in a limit order. This price is usually better than market prices
 
-stop_price: This is the price which will activate the order in a stop order. For a stop limit sell, the stop price is above the market value.
+**stop_price:** This is the price which will activate the order in a stop order. For a stop limit sell, the stop price is above the market value.
+
+**account_id:** This parameter is optional for all order methods, by default it will place orders in the main account. If a custom account is required, simply add the account_id parameter retreived from the `accounts` method
 
