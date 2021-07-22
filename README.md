@@ -50,7 +50,7 @@ The account id can be retrieved by calling
 ws.accounts()
 ```
 
-This will list out all the accounts associated with the login
+This will list out all the accounts associated with the login in an array
 
 #### Orders
 
