@@ -1,5 +1,8 @@
 # wealthsimple-python
 
+## Introduction
+The objective of this project is to provide a python library of trading functions for WealthSimple Trade. The goal is to have basic functionality to enable full trading automation. Included is the authy module which allows automatic logins even with 2FA enabled. Also included is a small library to obtain real-time quotes.
+
 ## Table of Contents
 
 - [wealthsimple-python](#wealthsimple-python)
@@ -21,10 +24,6 @@
     + [Specifications](#specifications)
     + [Example](#example-1)
 
-<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
-
-## Introduction
-The objective of this project is to provide a python library of trading functions for WealthSimple Trade. The goal is to have basic functionality to enable full trading automation. Included is the authy module which allows automatic logins even with 2FA enabled. Also included is a small library to obtain real-time quotes.
 
 ## Dependencies
 The requests is required to be installed. This can be obtained with `python -m pip install requests` in windows command prompt or just `pip install requests` on linux.
