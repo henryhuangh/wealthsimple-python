@@ -394,23 +394,75 @@ def trade_options(ws: WealthsimpleV2, account_id: str, security: Dict):
             print("No options available for this expiry date.")
             return
         
-        print(f"\nAvailable strikes (showing first 10):")
-        display_options = option_chain[:10]
+        # Get current stock price from security quote
+        current_price = None
+        quote = security.get('quoteV2', {})
+        if quote:
+            price_str = quote.get('price')
+            if price_str:
+                try:
+                    current_price = float(price_str)
+                except (ValueError, TypeError):
+                    pass
         
+        # If we don't have a current price from security, try to get it from the option chain
+        if current_price is None:
+            for option in option_chain:
+                opt_quote = option.get('quoteV2', {})
+                underlying_spot = opt_quote.get('underlyingSpot')
+                if underlying_spot:
+                    try:
+                        current_price = float(underlying_spot)
+                        break
+                    except (ValueError, TypeError):
+                        pass
+        
+        # Sort option chain by strike price
+        sorted_chain = sorted(option_chain, key=lambda x: float(x.get('optionDetails', {}).get('strikePrice', 0)))
+        
+        # Find the at-the-money strike (closest to current price)
+        if current_price is not None:
+            atm_idx = 0
+            min_diff = float('inf')
+            for idx, option in enumerate(sorted_chain):
+                strike = float(option.get('optionDetails', {}).get('strikePrice', 0))
+                diff = abs(strike - current_price)
+                if diff < min_diff:
+                    min_diff = diff
+                    atm_idx = idx
+            
+            # Get 5 strikes above and 5 below ATM
+            start_idx = max(0, atm_idx - 5)
+            end_idx = min(len(sorted_chain), atm_idx + 6)  # +6 to include ATM and 5 above
+            display_options = sorted_chain[start_idx:end_idx]
+            
+            print(f"\nCurrent Stock Price: ${current_price:.2f}")
+            print(f"Available strikes (centered around ATM):")
+        else:
+            # Fallback: show first 10 if we can't determine current price
+            display_options = sorted_chain[:10]
+            print(f"\nAvailable strikes (showing first 10):")
+        
+        print("-" * 60)
         for idx, option in enumerate(display_options, 1):
             option_details = option.get('optionDetails', {})
             quote = option.get('quoteV2', {})
             
             strike = option_details.get('strikePrice', 'N/A')
-            symbol = option_details.get('osiSymbol', 'N/A')
             
             bid = quote.get('bid', 'N/A')
             ask = quote.get('ask', 'N/A')
             last = quote.get('last', 'N/A')
+            in_the_money = quote.get('inTheMoney', False)
             
-            print(f"{idx}. Strike: ${strike} | Last: ${last} | Bid: ${bid} | Ask: ${ask}")
-            print(f"   {symbol}")
+            # Mark ATM strike
+            atm_marker = " [ATM]" if current_price and abs(float(strike) - current_price) == min_diff else ""
+            itm_marker = " [ITM]" if in_the_money else ""
+            
+            print(f"{idx}. Strike: ${strike}{atm_marker}{itm_marker}")
+            print(f"   Last: ${last} | Bid: ${bid} | Ask: ${ask}")
         
+        print("-" * 60)
         option_selection = input(f"\nSelect option (1-{len(display_options)}): ").strip()
         
         try:
@@ -426,6 +478,8 @@ def trade_options(ws: WealthsimpleV2, account_id: str, security: Dict):
         
     except Exception as e:
         print(f"Error fetching option chain: {e}")
+        import traceback
+        traceback.print_exc()
         return
     
     # Trade direction

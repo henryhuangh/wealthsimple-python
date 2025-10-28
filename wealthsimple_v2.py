@@ -506,7 +506,8 @@ class WealthsimpleV2:
     # ==================== Options Trading ====================
     
     def get_option_chain(self, security_id: str, expiry_date: str, option_type: str = 'CALL',
-                        include_greeks: bool = True, real_time_quote: bool = True) -> List[Dict]:
+                        include_greeks: bool = True, real_time_quote: bool = True,
+                        first: Optional[int] = None, cursor: Optional[str] = None) -> List[Dict]:
         """
         Get option chain for a security.
         
@@ -516,70 +517,125 @@ class WealthsimpleV2:
             option_type: 'CALL' or 'PUT'
             include_greeks: Include option greeks
             real_time_quote: Include real-time quotes
+            first: Optional limit on number of results
+            cursor: Optional cursor for pagination
             
         Returns:
             List of option contracts
         """
         gql_query = """
-        query FetchOptionChain($id: ID!, $expiryDate: Date!, $optionType: OptionType!, 
-                               $realTimeQuote: Boolean, $includeGreeks: Boolean!) {
+        query FetchOptionChain($id: ID!, $expiryDate: Date!, $optionType: OptionType!, $realTimeQuote: Boolean, $cursor: String, $first: Int, $includeGreeks: Boolean!) {
           security(id: $id) {
             id
             optionChain(
               expiryDate: $expiryDate
               optionType: $optionType
               realTimeQuote: $realTimeQuote
+              first: $first
+              after: $cursor
             ) {
               edges {
                 node {
-                  id
-                  optionDetails {
-                    strikePrice
-                    optionType
-                    expiryDate
-                    multiplier
-                    osiSymbol
-                    greekSymbols @include(if: $includeGreeks) {
-                      delta
-                      gamma
-                      theta
-                      vega
-                      rho
-                      impliedVolatility
-                      calculationTime
-                    }
-                  }
-                  quoteV2(currency: null) {
-                    securityId
-                    ask
-                    bid
-                    currency
-                    price
-                    ... on OptionQuote {
-                      marketStatus
-                      askSize
-                      bidSize
-                      close
-                      high
-                      last
-                      low
-                      open
-                      volume: vol
-                      breakEven
-                      inTheMoney
-                      liquidityStatus
-                      openInterest
-                      underlyingSpot
-                    }
-                  }
+                  ...OptionChainSecurity
+                  __typename
                 }
+                __typename
               }
               pageInfo {
                 hasNextPage
                 endCursor
+                __typename
               }
+              __typename
             }
+            __typename
           }
+        }
+        
+        fragment OptionChainSecurity on Security {
+          id
+          ...OptionDetailsSummary
+          quoteV2(currency: null) {
+            ...SecurityQuoteV2
+            __typename
+          }
+          __typename
+        }
+        
+        fragment OptionDetailsSummary on Security {
+          optionDetails {
+            strikePrice
+            optionType
+            greekSymbols @include(if: $includeGreeks) {
+              ...OptionGreekSymbols
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        
+        fragment OptionGreekSymbols on OptionGreekSymbols {
+          id
+          rho
+          vega
+          delta
+          theta
+          gamma
+          impliedVolatility
+          calculationTime
+          __typename
+        }
+        
+        fragment StreamedSecurityQuoteV2 on UnifiedQuote {
+          __typename
+          securityId
+          ask
+          bid
+          currency
+          price
+          sessionPrice
+          quotedAsOf
+          ... on EquityQuote {
+            marketStatus
+            askSize
+            bidSize
+            close
+            high
+            last
+            lastSize
+            low
+            open
+            mid
+            volume: vol
+            referenceClose
+            __typename
+          }
+          ... on OptionQuote {
+            marketStatus
+            askSize
+            bidSize
+            close
+            high
+            last
+            lastSize
+            low
+            open
+            mid
+            volume: vol
+            breakEven
+            inTheMoney
+            liquidityStatus
+            openInterest
+            underlyingSpot
+            __typename
+          }
+        }
+        
+        fragment SecurityQuoteV2 on UnifiedQuote {
+          ...StreamedSecurityQuoteV2
+          previousBaseline
+          __typename
         }
         """
         
@@ -588,6 +644,8 @@ class WealthsimpleV2:
             "expiryDate": expiry_date,
             "optionType": option_type,
             "realTimeQuote": real_time_quote,
+            "cursor": cursor,
+            "first": first,
             "includeGreeks": include_greeks
         }
         
@@ -613,16 +671,25 @@ class WealthsimpleV2:
         if not min_date:
             min_date = datetime.now().strftime('%Y-%m-%d')
         if not max_date:
-            # Default to 2 years from now
+            # Default to 3 years from now
             from datetime import timedelta
-            max_date = (datetime.now() + timedelta(days=730)).strftime('%Y-%m-%d')
+            max_date = (datetime.now() + timedelta(days=1095)).strftime('%Y-%m-%d')
         
         gql_query = """
         query FetchOptionExpirationDates($securityId: ID!, $minDate: Date!, $maxDate: Date!) {
           security(id: $securityId) {
             id
-            optionExpiryDates(minDate: $minDate, maxDate: $maxDate)
+            optionExpirationDates(minDate: $minDate, maxDate: $maxDate) {
+              ...OptionExpirationDates
+              __typename
+            }
+            __typename
           }
+        }
+        
+        fragment OptionExpirationDates on OptionExpirationDates {
+          expirationDates
+          __typename
         }
         """
         
@@ -633,7 +700,8 @@ class WealthsimpleV2:
         }
         
         result = self.graphql_query("FetchOptionExpirationDates", gql_query, variables)
-        return result.get('data', {}).get('security', {}).get('optionExpiryDates', [])
+        option_dates = result.get('data', {}).get('security', {}).get('optionExpirationDates', {})
+        return option_dates.get('expirationDates', [])
     
     def get_option_transaction_fees(self, side: str, premium: float, quantity: int,
                                    multiplier: int = 100, currency: str = 'CAD') -> Dict:
