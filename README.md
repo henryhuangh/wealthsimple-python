@@ -1,34 +1,40 @@
 # wealthsimple-python
 
+# Update Oct. 28, 2025
+
+As wealthsimple has moved to a graphql based framework, a new wealthsimple library is developed to accomodate that. A script, in utils was used to extract the network sniff from inspect element in safrari and output the relavant files into a data folder. This will then be fed into an AI to recreate a unofficial API.
+
 ## Introduction
+
 The objective of this project is to provide a python library of trading functions for WealthSimple Trade. The goal is to have basic functionality to enable full trading automation. Included is the authy module which allows automatic logins even with 2FA enabled. Also included is a small library to obtain real-time quotes.
 
 ## Table of Contents
 
 - [wealthsimple-python](#wealthsimple-python)
-  * [Introduction](#introduction)
-  * [Dependencies](#dependencies)
-  * [Features](#features)
-  * [Documentation](#documentation)
-    + [Setup](#setup)
-    + [Authentication](#authentication)
+  - [Introduction](#introduction)
+  - [Dependencies](#dependencies)
+  - [Features](#features)
+  - [Documentation](#documentation)
+    - [Setup](#setup)
+    - [Authentication](#authentication)
       - [Entering MFA](#entering-mfa)
       - [Storing MFA code](#storing-mfa-code)
       - [Refreshing Session](#refreshing-session)
-    + [Accounts](#accounts)
-    + [Orders](#orders)
+    - [Accounts](#accounts)
+    - [Orders](#orders)
       - [Param Definitions](#param-definitions)
       - [Example](#example)
-  * [Real-Time Quotes](#real-time-quotes)
-    + [Sources](#sources)
-    + [Specifications](#specifications)
-    + [Example](#example-1)
-
+  - [Real-Time Quotes](#real-time-quotes)
+    - [Sources](#sources)
+    - [Specifications](#specifications)
+    - [Example](#example-1)
 
 ## Dependencies
+
 The requests is required to be installed. This can be obtained with `python -m pip install requests` in windows command prompt or just `pip install requests` on linux.
 
 ## Features
+
 - Basic buy and sell functionality (Stop Limit, Limit, Market, Good till Cancel, Good for Day)
 - Built-in real time quotes support from TMX, NASDAQ and Yahoo
 - Balance retreival
@@ -36,15 +42,17 @@ The requests is required to be installed. This can be obtained with `python -m p
 ## Documentation
 
 ### Setup
+
 Make sure the wealthsimple and authy module is in PATH.
 Import the module wealthsimple
 
-```python 
+```python
 from weathsimple import wealthsimple
 import authy
 ```
 
 ### Authentication
+
 In order to login, the username and password must be entered into a wealthsimple object.
 
 ```python
@@ -73,7 +81,7 @@ ws=wealthsimple('email', 'password', MFA=MFA_token)
 
 The 2FA key can be stored for auto-login. A secure storage method should be used but will not be discussed in this documentation.
 
-To obtain the MFA key in the wealthsimple app, go to: settings > Two-step verification > Change method > Use a dedicated app. 
+To obtain the MFA key in the wealthsimple app, go to: settings > Two-step verification > Change method > Use a dedicated app.
 
 Take note of the code, the authy module can be used to generate the unique 6 digit token used for login.
 
@@ -85,6 +93,7 @@ MFA_token=authy.get_totp_token(MFA_key)
 ws=wealthsimple('email', 'password', MFA=MFA_token)
 
 ```
+
 **Note: add '=' to the MFA_key string to meet length requirements**
 
 #### Refreshing Session
@@ -94,7 +103,6 @@ After authenticating, the session will automatically log out after a set amount 
 ```python
 ws.refresh()
 ```
-
 
 ### Accounts
 
@@ -107,6 +115,7 @@ accounts=ws.accounts()
 The `accounts` variable will be an JSON array containing information for each account opened in wealthsimple. This is useful if multiple accounts were opened (e.g. Personal, TFSA, RRSP).
 
 Some convenient keys where `i` is the index of the account:
+
 ```python
 account_id=accounts[i]['id']
 #the account id is used to identify the account
@@ -127,25 +136,26 @@ To get the balance in CAD as a function use:
 ws.balance(account_id)
 ```
 
-
-
 ### Orders
 
-Type | Syntax | Required
---- | --- | ---
-Market Buy | ws.market_buy(tick_id, quantity, price, account_id) | tick_id, quantity
-Market Sell | ws.market_sell(tick_id, quantity, price, account_id) | tick_id, quantity
-Limit Buy | ws.limit_buy(tick_id, quantity, price, account_id) | tick_id, quantity, price
-Limit Sell | ws.limit_sell(tick_id, quantity, price, account_id) | tick_id, quantity, price
-Stop Limit Sell | ws.stop_limit_sell(tick_id, quantity, price, stop_price, account_id) | tick_id, quantity, price, stop_price
-Stop Limit Buy | ws.stop_limit_buy(tick_id, quantity, price, stop_price, account_id) | tick_id, quantity, price, stop_price
+| Type            | Syntax                                                               | Required                             |
+| --------------- | -------------------------------------------------------------------- | ------------------------------------ |
+| Market Buy      | ws.market_buy(tick_id, quantity, price, account_id)                  | tick_id, quantity                    |
+| Market Sell     | ws.market_sell(tick_id, quantity, price, account_id)                 | tick_id, quantity                    |
+| Limit Buy       | ws.limit_buy(tick_id, quantity, price, account_id)                   | tick_id, quantity, price             |
+| Limit Sell      | ws.limit_sell(tick_id, quantity, price, account_id)                  | tick_id, quantity, price             |
+| Stop Limit Sell | ws.stop_limit_sell(tick_id, quantity, price, stop_price, account_id) | tick_id, quantity, price, stop_price |
+| Stop Limit Buy  | ws.stop_limit_buy(tick_id, quantity, price, stop_price, account_id)  | tick_id, quantity, price, stop_price |
 
 #### Param Definitions
+
 **tick_id:** tick_id is a unique idenitifier for a particular stock, this parameter can be retrieved by calling the `tick_id` method
-Example: 
+Example:
+
 ```python
 ticker_id=ws.tick_id('AAPL', 'NASDAQ')
 ```
+
 This will retrieve the the tick_id for AAPL INC. listed on NASDAQ
 
 **quantity:** This refers to the quantity of stock to purchase or sell
@@ -183,12 +193,12 @@ There are four supported sources:
 
 Since the same ticker may refer to different companies in different exchanges, these differences must be accounted for. When obtaining quotes on TMX for a US stock for instance ':US' must be added (e.g. 'AAPL' becomes 'AAPL:US')
 
-Source | Canadian | US
---- | --- | ---
-NASDAQ | unsupported | ticker
-TMX | ticker | ticker + ':US'
-YAHOO | ticker + '.TO' | ticker
-WEBULL | unsupported | ticker
+| Source | Canadian       | US             |
+| ------ | -------------- | -------------- |
+| NASDAQ | unsupported    | ticker         |
+| TMX    | ticker         | ticker + ':US' |
+| YAHOO  | ticker + '.TO' | ticker         |
+| WEBULL | unsupported    | ticker         |
 
 ### Example
 

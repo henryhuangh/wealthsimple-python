@@ -1,4 +1,5 @@
 data
-pycache
 .env
 test
+notes.md
+__pycache__
