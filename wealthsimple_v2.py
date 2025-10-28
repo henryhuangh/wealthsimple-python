@@ -1039,7 +1039,7 @@ class WealthsimpleV2:
                     order_type: str = 'BUY_QUANTITY', execution_type: str = 'LIMIT',
                     limit_price: Optional[float] = None, stop_price: Optional[float] = None,
                     time_in_force: str = 'DAY', open_close: Optional[str] = None,
-                    trading_session: str = 'EXTENDED') -> Dict:
+                    trading_session: Optional[str] = None) -> Dict:
         """
         Create a new order (stock or option).
         
@@ -1053,7 +1053,8 @@ class WealthsimpleV2:
             stop_price: Stop price (required for STOP and STOP_LIMIT orders)
             time_in_force: 'DAY', 'GTC', etc.
             open_close: For options: 'OPEN' (to open position) or 'CLOSE' (to close position)
-            trading_session: 'EXTENDED' (default) or 'REGULAR'
+            trading_session: Optional - 'EXTENDED' or 'REGULAR'. If not specified, the API will
+                           determine appropriate session based on market hours and account capabilities.
             
         Returns:
             Order creation response
@@ -1085,8 +1086,7 @@ class WealthsimpleV2:
             "orderType": order_type,
             "quantity": quantity,
             "securityId": security_id,
-            "timeInForce": time_in_force,
-            "tradingSession": trading_session
+            "timeInForce": time_in_force
         }
         
         if limit_price is not None:
@@ -1097,6 +1097,9 @@ class WealthsimpleV2:
         
         if open_close is not None:
             order_input["openClose"] = open_close
+        
+        if trading_session is not None:
+            order_input["tradingSession"] = trading_session
         
         variables = {
             "input": order_input
