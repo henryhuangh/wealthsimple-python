@@ -970,7 +970,8 @@ class WealthsimpleV2:
     def create_order(self, account_id: str, security_id: str, quantity: int,
                     order_type: str = 'BUY_QUANTITY', execution_type: str = 'LIMIT',
                     limit_price: Optional[float] = None, stop_price: Optional[float] = None,
-                    time_in_force: str = 'DAY', open_close: Optional[str] = None) -> Dict:
+                    time_in_force: str = 'DAY', open_close: Optional[str] = None,
+                    trading_session: str = 'EXTENDED') -> Dict:
         """
         Create a new order (stock or option).
         
@@ -984,6 +985,7 @@ class WealthsimpleV2:
             stop_price: Stop price (required for STOP and STOP_LIMIT orders)
             time_in_force: 'DAY', 'GTC', etc.
             open_close: For options: 'OPEN' (to open position) or 'CLOSE' (to close position)
+            trading_session: 'EXTENDED' (default) or 'REGULAR'
             
         Returns:
             Order creation response
@@ -996,15 +998,14 @@ class WealthsimpleV2:
             errors {
               code
               message
+              __typename
             }
             order {
               orderId
               createdAt
-              filledAt
-              completedAt
-              cancelledAt
-              status
+              __typename
             }
+            __typename
           }
         }
         """
@@ -1016,7 +1017,8 @@ class WealthsimpleV2:
             "orderType": order_type,
             "quantity": quantity,
             "securityId": security_id,
-            "timeInForce": time_in_force
+            "timeInForce": time_in_force,
+            "tradingSession": trading_session
         }
         
         if limit_price is not None:
