@@ -973,13 +973,3 @@ ws.limit_buy(tick_id, 10, 140)
 ```
 
 For legacy API documentation, see `archive/README.md`.
-
----
-
-<div align="center">
-
-**Made with ❤️ by the community**
-
-⭐ Star this repo if you find it helpful!
-
-</div>
