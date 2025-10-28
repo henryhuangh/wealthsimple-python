@@ -822,52 +822,125 @@ class WealthsimpleV2:
         
         return [edge.get('node', {}) for edge in edges]
     
-    def get_account_financials(self, account_ids: List[str], currency: str = 'CAD') -> List[Dict]:
+    def get_account_financials(self, account_ids: List[str], currency: str = 'CAD', 
+                              start_date: Optional[str] = None) -> List[Dict]:
         """
         Get financial information for specific accounts.
         
         Args:
             account_ids: List of account IDs
             currency: Currency for the financials
+            start_date: Optional start date for returns calculation (YYYY-MM-DD)
             
         Returns:
             List of account financial data
         """
         gql_query = """
-        query FetchAccountFinancials($ids: [String!]!, $currency: Currency) {
+        query FetchAccountFinancials($ids: [String!]!, $startDate: Date, $currency: Currency) {
           accounts(ids: $ids) {
             id
-            custodianAccounts {
-              id
-              branch
-              financials {
-                current {
-                  netLiquidation(currency: $currency) {
-                    amount
-                    currency
-                  }
-                  buyingPower(currency: $currency) {
-                    amount
-                    currency
-                  }
-                  availableToBuy(currency: $currency) {
-                    amount
-                    currency
-                  }
-                  cash(currency: $currency) {
-                    amount
-                    currency
-                  }
-                }
-              }
-            }
+            ...AccountFinancials
+            __typename
           }
+        }
+        
+        fragment AccountFinancials on Account {
+          id
+          custodianAccounts {
+            id
+            branch
+            financials {
+              current {
+                ...CustodianAccountCurrentFinancialValues
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+          financials {
+            currentCombined(currency: $currency) {
+              id
+              ...AccountCurrentFinancials
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        
+        fragment CustodianAccountCurrentFinancialValues on CustodianAccountCurrentFinancialValues {
+          deposits {
+            ...Money
+            __typename
+          }
+          earnings {
+            ...Money
+            __typename
+          }
+          netDeposits {
+            ...Money
+            __typename
+          }
+          netLiquidationValue {
+            ...Money
+            __typename
+          }
+          withdrawals {
+            ...Money
+            __typename
+          }
+          __typename
+        }
+        
+        fragment Money on Money {
+          amount
+          cents
+          currency
+          __typename
+        }
+        
+        fragment AccountCurrentFinancials on AccountCurrentFinancials {
+          id
+          netLiquidationValueV2 {
+            ...Money
+            __typename
+          }
+          netDeposits: netDepositsV2 {
+            ...Money
+            __typename
+          }
+          simpleReturns(referenceDate: $startDate) {
+            ...SimpleReturns
+            __typename
+          }
+          totalDeposits: totalDepositsV2 {
+            ...Money
+            __typename
+          }
+          totalWithdrawals: totalWithdrawalsV2 {
+            ...Money
+            __typename
+          }
+          __typename
+        }
+        
+        fragment SimpleReturns on SimpleReturns {
+          amount {
+            ...Money
+            __typename
+          }
+          asOf
+          rate
+          referenceDate
+          __typename
         }
         """
         
         variables = {
             "ids": account_ids,
-            "currency": currency
+            "currency": currency,
+            "startDate": start_date
         }
         
         result = self.graphql_query("FetchAccountFinancials", gql_query, variables)
