@@ -822,6 +822,42 @@ class WealthsimpleV2:
         
         return [edge.get('node', {}) for edge in edges]
     
+    def get_account_funding_balances(self, account_ids: List[str]) -> List[Dict]:
+        """
+        Get account funding balances (available trading cash).
+        
+        Args:
+            account_ids: List of account IDs
+            
+        Returns:
+            List of account funding balances with trading_balances for each currency
+        """
+        gql_query = """
+        query FetchAccountFundingBalances($accountIds: [ID!]!) {
+          account_funding_balances(account_ids: $accountIds) {
+            ...AccountFundingBalance
+            __typename
+          }
+        }
+        
+        fragment AccountFundingBalance on AccountFundingBalance {
+          id
+          trading_balances {
+            amount
+            currency
+            __typename
+          }
+          __typename
+        }
+        """
+        
+        variables = {
+            "accountIds": account_ids
+        }
+        
+        result = self.graphql_query("FetchAccountFundingBalances", gql_query, variables)
+        return result.get('data', {}).get('account_funding_balances', [])
+    
     def get_account_financials(self, account_ids: List[str], currency: str = 'CAD', 
                               start_date: Optional[str] = None) -> List[Dict]:
         """
