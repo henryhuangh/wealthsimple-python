@@ -1,8 +1,97 @@
 # wealthsimple-python
 
-# Update Oct. 28, 2025
+# 🚀 NEW: Wealthsimple API v2 (Oct. 28, 2025)
 
-As wealthsimple has moved to a graphql based framework, a new wealthsimple library is developed to accomodate that. A script, in utils was used to extract the network sniff from inspect element in safrari and output the relavant files into a data folder. This will then be fed into an AI to recreate a unofficial API.
+**A new GraphQL-based API client is now available!**
+
+As Wealthsimple has moved to a GraphQL-based framework, a new modern API client has been developed:
+
+- **File**: `wealthsimple_v2.py`
+- **Features**:
+  - ✅ OAuth v2 authentication with automatic token refresh
+  - ✅ Complete GraphQL API support
+  - ✅ Security search by ticker symbol
+  - ✅ Real-time quotes and market data
+  - ✅ Account management and positions
+  - ✅ Stock trading (market, limit, stop-limit orders)
+  - ✅ **Options trading** with full option chain support
+  - ✅ Activity feed and order history
+  - ✅ Comprehensive documentation and examples
+
+📖 **[See EXAMPLES_V2.md for complete usage guide](EXAMPLES_V2.md)**
+
+### Quick Start (v2)
+
+```python
+from wealthsimple_v2 import WealthsimpleV2
+
+# Authenticate
+ws = WealthsimpleV2(username='your@email.com', password='yourpassword')
+
+# Search for a stock
+results = ws.search_securities('AAPL')
+security_id = ws.get_ticker_id('AAPL', 'NASDAQ')
+
+# Get a quote
+quote = ws.get_security_quote(security_id)
+print(f"AAPL: ${quote['price']}")
+
+# Place an order
+accounts = ws.get_accounts()
+order = ws.limit_buy(accounts[0]['id'], security_id, quantity=1, limit_price=150.00)
+
+# Trade options
+expiry_dates = ws.get_option_expiry_dates(security_id)
+option_chain = ws.get_option_chain(security_id, expiry_dates[0], 'CALL')
+```
+
+**Run the test suite**: `python test_wealthsimple_v2.py`
+
+### 🎮 Interactive Trading Script
+
+An interactive command-line trading interface is available for easy testing and trading:
+
+```bash
+python interactive_trade.py
+```
+
+**Features:**
+
+- 🔐 Interactive authentication with credential prompts
+- 🔍 Search securities by symbol or view popular stocks
+- 📊 View detailed security information and real-time quotes
+- 📈 Trade stocks (market and limit orders)
+- 📉 Trade options (calls/puts with full chain view)
+- 💼 Select from your trading accounts
+- ✅ Order confirmation before execution
+
+**Usage:**
+
+```bash
+# Run with environment variables
+export WS_USERNAME='your@email.com'
+export WS_PASSWORD='yourpassword'
+export WS_OTP='123456'  # Optional, if 2FA enabled
+python interactive_trade.py
+
+# Or run and enter credentials interactively
+python interactive_trade.py
+```
+
+The script will guide you through:
+
+1. Authentication
+2. Searching for securities (or viewing popular symbols)
+3. Viewing security details and options
+4. Selecting your trading account
+5. Choosing between stock or options trading
+6. Placing orders with confirmation
+
+---
+
+# Legacy API (wealthsimple.py)
+
+The original API (`wealthsimple.py`) is still available but uses the deprecated Trade API endpoints. It is recommended to migrate to the v2 API for new projects.
 
 ## Introduction
 
