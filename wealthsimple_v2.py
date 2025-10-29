@@ -8,7 +8,7 @@ options trading, and account management.
 Based on network traffic analysis from the Wealthsimple web application.
 
 Usage:
-    from wealthsimple_v2 import WealthsimpleV2
+    from wealthsimple_v2 import WealthsimpleV2, OrderStatus, OrderType
     
     ws = WealthsimpleV2(username='your@email.com', password='yourpassword')
     
@@ -24,7 +24,19 @@ Usage:
         security_id='sec-s-xxxxx',
         quantity=1,
         limit_price=150.00,
-        order_type='BUY_QUANTITY'
+        order_type=OrderType.BUY_QUANTITY
+    )
+    
+    # Get pending orders
+    pending = ws.get_pending_orders(account_ids=['tfsa-xxxxx'])
+    
+    # Cancel an order
+    ws.cancel_order(order['externalCanonicalId'])
+    
+    # Filter activities by status
+    activities = ws.get_activities(
+        statuses=[OrderStatus.FILLED],
+        types=[OrderType.DIY_BUY]
     )
 """
 
@@ -35,6 +47,64 @@ import time
 import base64
 from typing import Dict, List, Optional, Any
 from datetime import datetime, date
+
+
+# ==================== Constants & Enums ====================
+
+class OrderStatus:
+    """Order status constants for filtering activities."""
+    PENDING = 'PENDING'        # Order submitted but not yet executed
+    FILLED = 'FILLED'          # Order completed/executed
+    CANCELLED = 'CANCELLED'    # Order cancelled
+    SUBMITTED = 'SUBMITTED'    # Order submitted to exchange
+    REJECTED = 'REJECTED'      # Order rejected
+    EXPIRED = 'EXPIRED'        # Order expired
+    COMPLETED = 'COMPLETED'    # Order completed (alternative to FILLED)
+
+
+class OrderType:
+    """Order type constants."""
+    BUY_QUANTITY = 'BUY_QUANTITY'
+    SELL_QUANTITY = 'SELL_QUANTITY'
+    
+    # Activity types for filtering
+    DIY_BUY = 'DIY_BUY'
+    DIY_SELL = 'DIY_SELL'
+    OPTIONS_BUY = 'OPTIONS_BUY'
+    OPTIONS_SELL = 'OPTIONS_SELL'
+    OPTIONS_MULTILEG = 'OPTIONS_MULTILEG'
+    MANAGED_BUY = 'MANAGED_BUY'
+    MANAGED_SELL = 'MANAGED_SELL'
+    CRYPTO_BUY = 'CRYPTO_BUY'
+    CRYPTO_SELL = 'CRYPTO_SELL'
+    DIVIDEND = 'DIVIDEND'
+
+
+class OrderSubType:
+    """Order sub-type constants."""
+    LIMIT_ORDER = 'LIMIT_ORDER'
+    MARKET_ORDER = 'MARKET_ORDER'
+    STOP_ORDER = 'STOP_ORDER'
+    STOP_LIMIT_ORDER = 'STOP_LIMIT_ORDER'
+    FRACTIONAL_ORDER = 'FRACTIONAL_ORDER'
+    DIVIDEND_REINVESTMENT = 'DIVIDEND_REINVESTMENT'
+
+
+class ExecutionType:
+    """Execution type constants for order creation."""
+    MARKET = 'MARKET'
+    LIMIT = 'LIMIT'
+    STOP = 'STOP'
+    STOP_LIMIT = 'STOP_LIMIT'
+
+
+class TimeInForce:
+    """Time in force constants."""
+    DAY = 'DAY'          # Day order
+    GTC = 'GTC'          # Good till cancelled
+    GTD = 'GTD'          # Good till date
+    IOC = 'IOC'          # Immediate or cancel
+    FOK = 'FOK'          # Fill or kill
 
 
 class WealthsimpleV2:
@@ -1080,46 +1150,98 @@ class WealthsimpleV2:
         return [edge.get('node', {}) for edge in edges]
     
     def get_activities(self, account_ids: Optional[List[str]] = None, types: Optional[List[str]] = None,
-                      statuses: Optional[List[str]] = None, limit: int = 100) -> List[Dict]:
+                      statuses: Optional[List[str]] = None, sub_types: Optional[List[str]] = None,
+                      security_ids: Optional[List[str]] = None, start_date: Optional[str] = None,
+                      end_date: Optional[str] = None, limit: int = 100, cursor: Optional[str] = None) -> Dict:
         """
         Get activity feed items (orders, trades, deposits, etc.).
         
         Args:
             account_ids: Optional list of account IDs to filter by
-            types: Optional list of activity types to filter by
-            statuses: Optional list of statuses to filter by
+            types: Optional list of activity types to filter by (e.g., 'DIY_BUY', 'DIY_SELL', 
+                   'OPTIONS_BUY', 'OPTIONS_SELL', 'CRYPTO_BUY', 'DIVIDEND', etc.)
+            statuses: Optional list of statuses to filter by (e.g., 'PENDING', 'COMPLETED', 'CANCELLED')
+            sub_types: Optional list of sub-types to filter by (e.g., 'LIMIT_ORDER', 'MARKET_ORDER', 
+                      'STOP_LIMIT_ORDER', 'FRACTIONAL_ORDER', 'DIVIDEND_REINVESTMENT', etc.)
+            security_ids: Optional list of security IDs to filter by specific securities
+            start_date: Optional start date in ISO format (e.g., '2025-10-01T00:00:00.000Z')
+            end_date: Optional end date in ISO format (e.g., '2025-10-29T23:59:59.999Z')
             limit: Maximum number of items to return
+            cursor: Optional cursor for pagination
             
         Returns:
-            List of activity items
+            Dictionary containing 'items' (list of activity items) and 'pageInfo' for pagination
         """
         gql_query = """
-        query FetchActivityFeedItems($first: Int, $condition: ActivityCondition, 
+        query FetchActivityFeedItems($first: Int, $cursor: Cursor, $condition: ActivityCondition, 
                                      $orderBy: [ActivitiesOrderBy!] = OCCURRED_AT_DESC) {
-          activityFeedItems(first: $first, condition: $condition, orderBy: $orderBy) {
+          activityFeedItems(first: $first, after: $cursor, condition: $condition, orderBy: $orderBy) {
             edges {
               node {
-                accountId
-                amount
-                amountSign
-                assetQuantity
-                assetSymbol
-                canonicalId
-                currency
-                occurredAt
-                securityId
-                status
-                subType
-                symbol
-                type
-                unifiedStatus
+                ...Activity
+                __typename
               }
+              __typename
             }
             pageInfo {
               hasNextPage
               endCursor
+              __typename
             }
+            __typename
           }
+        }
+        
+        fragment Activity on ActivityFeedItem {
+          accountId
+          aftOriginatorName
+          aftTransactionCategory
+          aftTransactionType
+          amount
+          amountSign
+          assetQuantity
+          assetSymbol
+          canonicalId
+          currency
+          eTransferEmail
+          eTransferName
+          externalCanonicalId
+          groupId
+          identityId
+          institutionName
+          occurredAt
+          p2pHandle
+          p2pMessage
+          spendMerchant
+          securityId
+          billPayCompanyName
+          billPayPayeeNickname
+          redactedExternalAccountNumber
+          opposingAccountId
+          status
+          subType
+          type
+          strikePrice
+          contractType
+          expiryDate
+          chequeNumber
+          provisionalCreditAmount
+          primaryBlocker
+          interestRate
+          frequency
+          counterAssetSymbol
+          rewardProgram
+          counterPartyCurrency
+          counterPartyCurrencyAmount
+          counterPartyName
+          fxRate
+          fees
+          reference
+          transferType
+          optionStrategy
+          rejectionReason
+          resolvable
+          __typename
         }
         """
         
@@ -1130,17 +1252,89 @@ class WealthsimpleV2:
             condition['types'] = types
         if statuses:
             condition['unifiedStatuses'] = statuses
+        if sub_types:
+            condition['subTypes'] = sub_types
+        if security_ids:
+            condition['securityIds'] = security_ids
+        if start_date:
+            condition['startDate'] = start_date
+        if end_date:
+            condition['endDate'] = end_date
         
         variables = {
             "first": limit,
+            "cursor": cursor,
             "condition": condition if condition else None,
             "orderBy": "OCCURRED_AT_DESC"
         }
         
         result = self.graphql_query("FetchActivityFeedItems", gql_query, variables)
-        edges = result.get('data', {}).get('activityFeedItems', {}).get('edges', [])
+        activity_data = result.get('data', {}).get('activityFeedItems', {})
+        edges = activity_data.get('edges', [])
         
-        return [edge.get('node', {}) for edge in edges]
+        return {
+            'items': [edge.get('node', {}) for edge in edges],
+            'pageInfo': activity_data.get('pageInfo', {})
+        }
+    
+    def get_pending_orders(self, account_ids: Optional[List[str]] = None) -> List[Dict]:
+        """
+        Get all pending orders for specified accounts.
+        
+        This is a convenience method that filters for pending buy/sell orders.
+        
+        Args:
+            account_ids: Optional list of account IDs to filter by
+            
+        Returns:
+            List of pending order items
+        """
+        order_types = [
+            'MANAGED_BUY', 'CRYPTO_BUY', 'DIY_BUY', 'OPTIONS_BUY',
+            'MANAGED_SELL', 'CRYPTO_SELL', 'DIY_SELL', 'OPTIONS_SELL',
+            'OPTIONS_MULTILEG'
+        ]
+        
+        order_subtypes = [
+            'FRACTIONAL_ORDER', 'MARKET_ORDER', 'STOP_ORDER', 
+            'LIMIT_ORDER', 'STOP_LIMIT_ORDER'
+        ]
+        
+        result = self.get_activities(
+            account_ids=account_ids,
+            types=order_types,
+            statuses=['PENDING'],
+            sub_types=order_subtypes,
+            limit=100
+        )
+        
+        return result['items']
+    
+    def get_security_activities(self, security_id: str, account_ids: Optional[List[str]] = None,
+                               start_date: Optional[str] = None, end_date: Optional[str] = None,
+                               limit: int = 100) -> List[Dict]:
+        """
+        Get all activities for a specific security (trades, dividends, etc.).
+        
+        Args:
+            security_id: Security ID to filter by
+            account_ids: Optional list of account IDs to filter by
+            start_date: Optional start date in ISO format (e.g., '2025-10-01T00:00:00.000Z')
+            end_date: Optional end date in ISO format (e.g., '2025-10-29T23:59:59.999Z')
+            limit: Maximum number of items to return
+            
+        Returns:
+            List of activity items for the security
+        """
+        result = self.get_activities(
+            account_ids=account_ids,
+            security_ids=[security_id],
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit
+        )
+        
+        return result['items']
     
     # ==================== Trading ====================
     
@@ -1278,6 +1472,51 @@ class WealthsimpleV2:
         """
         return self.create_order(account_id, option_id, quantity, 'SELL_QUANTITY', 'LIMIT',
                                limit_price=limit_price, open_close=open_close)
+    
+    def cancel_order(self, external_id: str) -> Dict:
+        """
+        Cancel an existing order.
+        
+        Args:
+            external_id: The external order ID that was used when creating the order
+                        (e.g., 'order-da8e68b0-6a66-4783-b5a6-44e5efc30c3f')
+            
+        Returns:
+            Cancel order response containing the externalId and any errors
+            
+        Raises:
+            Exception if cancellation fails or if there are errors in the response
+        """
+        gql_query = """
+        mutation SoOrdersOrderCancel($cancelOrderRequest: CancelOrderRequest!) {
+          orderServiceCancelOrder(cancelOrderRequest: $cancelOrderRequest) {
+            externalId
+            errors {
+              code
+              message
+              __typename
+            }
+            __typename
+          }
+        }
+        """
+        
+        variables = {
+            "cancelOrderRequest": {
+                "externalId": external_id
+            }
+        }
+        
+        result = self.graphql_query("SoOrdersOrderCancel", gql_query, variables)
+        cancel_response = result.get('data', {}).get('orderServiceCancelOrder', {})
+        
+        # Check for errors in the response
+        if cancel_response.get('errors'):
+            errors = cancel_response['errors']
+            error_messages = [f"{err.get('code', 'UNKNOWN')}: {err.get('message', 'No message')}" for err in errors]
+            raise Exception(f"Failed to cancel order: {'; '.join(error_messages)}")
+        
+        return cancel_response
     
     # ==================== Identity & User Info ====================
     
