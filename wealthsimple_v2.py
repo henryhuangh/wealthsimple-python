@@ -3,7 +3,7 @@ Wealthsimple API v2 - Unofficial GraphQL-based API Client
 
 This module provides an unofficial Python client for the Wealthsimple platform
 using their GraphQL API. It supports authentication, security search, trading,
-options trading, and account management.
+options trading, account management, and real-time WebSocket subscriptions.
 
 Based on network traffic analysis from the Wealthsimple web application.
 
@@ -38,6 +38,17 @@ Usage:
         statuses=[OrderStatus.FILLED],
         types=[OrderType.DIY_BUY]
     )
+    
+    # Real-time subscriptions (requires 'websockets' package)
+    import asyncio
+    
+    async def stream_quotes():
+        async with ws.subscribe() as sub:
+            async for msg in sub.stream_quotes(['sec-s-xxxxx']):
+                quote = msg['payload']['data']['securityQuoteUpdates']['quoteV2']
+                print(f"Price: {quote['price']}")
+    
+    asyncio.run(stream_quotes())
 """
 
 import requests
@@ -45,8 +56,20 @@ import json
 import os
 import time
 import base64
-from typing import Dict, List, Optional, Any
+import asyncio
+import uuid
+from typing import Dict, List, Optional, Any, Callable, AsyncIterator
 from datetime import datetime, date
+
+# Optional WebSocket support for subscriptions
+try:
+    import websockets
+    from websockets.client import WebSocketClientProtocol
+    WEBSOCKETS_AVAILABLE = True
+except ImportError:
+    WEBSOCKETS_AVAILABLE = False
+    websockets = None
+    WebSocketClientProtocol = None
 
 
 # ==================== Constants & Enums ====================
@@ -1571,6 +1594,484 @@ class WealthsimpleV2:
         
         result = self.graphql_query("FetchIdentity", gql_query, variables)
         return result.get('data', {}).get('identity', {})
+    
+    def subscribe(self, device_id: Optional[str] = None) -> 'WealthsimpleSubscriptions':
+        """
+        Create a WebSocket subscription client for real-time data streams.
+        
+        Args:
+            device_id: Optional device ID (auto-generated if not provided)
+            
+        Returns:
+            WealthsimpleSubscriptions instance
+            
+        Raises:
+            Exception if websockets library is not installed
+            
+        Example:
+            async with ws.subscribe() as sub:
+                async for msg in sub.stream_quotes(['sec-s-xxxxx']):
+                    print(f"Quote update: {msg}")
+        """
+        if not WEBSOCKETS_AVAILABLE:
+            raise Exception(
+                "WebSocket support requires the 'websockets' library. "
+                "Install it with: pip install websockets"
+            )
+        
+        self._ensure_authenticated()
+        return WealthsimpleSubscriptions(
+            access_token=self.access_token,
+            identity_id=self.identity_id,
+            device_id=device_id
+        )
+
+
+# ==================== WebSocket Subscriptions ====================
+
+class WealthsimpleSubscriptions:
+    """
+    WebSocket subscription client for Wealthsimple real-time data streams.
+    
+    This class handles GraphQL subscriptions over WebSocket using the
+    graphql-transport-ws protocol for real-time updates on:
+    - Security quotes (real-time price updates)
+    - Account activity feed updates
+    - Identity and account core updates
+    - Custodian account balance changes
+    
+    Usage:
+        async with ws.subscribe() as sub:
+            # Stream real-time quotes
+            async for msg in sub.stream_quotes(['sec-s-xxxxx']):
+                print(f"Price: {msg['payload']['data']['securityQuoteUpdates']['quoteV2']['price']}")
+    """
+    
+    def __init__(self, access_token: str, identity_id: Optional[str] = None, 
+                 device_id: Optional[str] = None):
+        """
+        Initialize subscription client.
+        
+        Args:
+            access_token: OAuth access token
+            identity_id: Optional identity ID
+            device_id: Optional device ID (auto-generated if not provided)
+        """
+        if not WEBSOCKETS_AVAILABLE:
+            raise Exception(
+                "WebSocket support requires the 'websockets' library. "
+                "Install it with: pip install websockets"
+            )
+        
+        self.access_token = access_token
+        self.identity_id = identity_id
+        self.device_id = device_id or uuid.uuid4().hex
+        self.ws: Optional[WebSocketClientProtocol] = None
+        self._connection_ack_event = asyncio.Event()
+        self._subscriptions: Dict[str, asyncio.Queue] = {}
+        self._receiver_task: Optional[asyncio.Task] = None
+        
+        # Possible WebSocket URLs to try
+        self.candidate_urls = [
+            "wss://realtime-api.wealthsimple.com/subscription",
+            "wss://my.wealthsimple.com/graphql",
+            "wss://my.wealthsimple.com/subscriptions",
+            "wss://my.wealthsimple.com/subscription",
+        ]
+    
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self.connect()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
+    
+    def _get_headers(self) -> Dict[str, str]:
+        """Get WebSocket connection headers."""
+        return {
+            "Origin": "https://my.wealthsimple.com",
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+            ),
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Authorization": f"Bearer {self.access_token}",
+            "x-ws-api-version": "12",
+            "x-platform-os": "web",
+            "x-ws-locale": "en-CA",
+            "x-ws-profile": "trade",
+        }
+    
+    async def connect(self) -> None:
+        """
+        Establish WebSocket connection and initialize the graphql-transport-ws protocol.
+        
+        Raises:
+            Exception if connection fails
+        """
+        headers = self._get_headers()
+        last_exc = None
+        
+        # Try candidate URLs sequentially
+        for url in self.candidate_urls:
+            try:
+                # Try modern websockets arg first, fall back to older version
+                try:
+                    self.ws = await websockets.connect(
+                        url,
+                        additional_headers=headers,
+                        subprotocols=["graphql-transport-ws"],
+                        max_size=None,
+                        open_timeout=20,
+                        close_timeout=10,
+                    )
+                except TypeError:
+                    self.ws = await websockets.connect(
+                        url,
+                        extra_headers=headers,
+                        subprotocols=["graphql-transport-ws"],
+                        max_size=None,
+                        open_timeout=20,
+                        close_timeout=10,
+                    )
+                break
+            except Exception as e:
+                last_exc = e
+                continue
+        
+        if self.ws is None:
+            raise last_exc or RuntimeError("Failed to establish WebSocket connection")
+        
+        # Send connection_init per GraphQL over WebSocket Protocol
+        init_payload = {
+            "Authorization": f"Bearer {self.access_token}",
+            "x-ws-api-version": "12",
+            "x-ws-locale": "en-CA",
+            "x-ws-profile": "trade",
+            "x-platform-os": "web",
+            "x-ws-device-id": self.device_id,
+        }
+        await self._send_message({"type": "connection_init", "payload": init_payload})
+        
+        # Start receiver task
+        self._receiver_task = asyncio.create_task(self._receiver())
+        
+        # Wait for connection_ack (best-effort)
+        try:
+            await asyncio.wait_for(self._connection_ack_event.wait(), timeout=10)
+        except asyncio.TimeoutError:
+            # Continue anyway, but connection might not be ready
+            pass
+    
+    async def close(self) -> None:
+        """Close the WebSocket connection and clean up resources."""
+        if self._receiver_task and not self._receiver_task.done():
+            self._receiver_task.cancel()
+            try:
+                await self._receiver_task
+            except asyncio.CancelledError:
+                pass
+        
+        if self.ws:
+            try:
+                await self.ws.close(code=1000, reason="client shutdown")
+            except Exception:
+                pass
+            self.ws = None
+    
+    async def _send_message(self, message: Dict[str, Any]) -> None:
+        """Send a message over the WebSocket."""
+        if not self.ws:
+            raise Exception("WebSocket not connected")
+        await self.ws.send(json.dumps(message))
+    
+    async def _receiver(self) -> None:
+        """Background task to receive and route WebSocket messages."""
+        try:
+            async for message in self.ws:
+                try:
+                    data = json.loads(message)
+                    msg_type = data.get("type", "unknown")
+                    
+                    if msg_type == "connection_ack":
+                        self._connection_ack_event.set()
+                    elif msg_type == "next":
+                        # Route subscription data to appropriate queue
+                        sub_id = data.get("id")
+                        if sub_id and sub_id in self._subscriptions:
+                            await self._subscriptions[sub_id].put(data)
+                    elif msg_type == "error":
+                        # Route errors to subscription queues
+                        sub_id = data.get("id")
+                        if sub_id and sub_id in self._subscriptions:
+                            await self._subscriptions[sub_id].put(data)
+                    elif msg_type == "complete":
+                        # Subscription completed
+                        sub_id = data.get("id")
+                        if sub_id and sub_id in self._subscriptions:
+                            await self._subscriptions[sub_id].put(None)  # Signal completion
+                except json.JSONDecodeError:
+                    pass  # Ignore non-JSON messages
+                except Exception:
+                    pass  # Ignore other parsing errors
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass  # Connection closed or error
+    
+    async def _subscribe(self, operation_name: str, query: str, 
+                        variables: Optional[Dict] = None) -> AsyncIterator[Dict]:
+        """
+        Internal method to create a subscription and yield messages.
+        
+        Args:
+            operation_name: GraphQL operation name
+            query: GraphQL subscription query
+            variables: Optional variables
+            
+        Yields:
+            Subscription message dictionaries
+        """
+        sub_id = str(uuid.uuid4())
+        queue = asyncio.Queue()
+        self._subscriptions[sub_id] = queue
+        
+        try:
+            # Send subscribe message
+            subscribe_msg = {
+                "id": sub_id,
+                "type": "subscribe",
+                "payload": {
+                    "operationName": operation_name,
+                    "query": query,
+                    "variables": variables or {}
+                }
+            }
+            await self._send_message(subscribe_msg)
+            
+            # Yield messages from queue
+            while True:
+                msg = await queue.get()
+                if msg is None:  # Completion signal
+                    break
+                yield msg
+        finally:
+            # Cleanup
+            if sub_id in self._subscriptions:
+                del self._subscriptions[sub_id]
+    
+    async def stream_quotes(self, security_ids: List[str], 
+                           currency: Optional[str] = None) -> AsyncIterator[Dict]:
+        """
+        Stream real-time quote updates for one or more securities.
+        
+        Args:
+            security_ids: List of security IDs to subscribe to
+            currency: Optional currency filter
+            
+        Yields:
+            Quote update messages with structure:
+            {
+                "type": "next",
+                "id": "subscription-id",
+                "payload": {
+                    "data": {
+                        "securityQuoteUpdates": {
+                            "id": "sec-s-xxxxx",
+                            "quoteV2": {
+                                "price": 150.25,
+                                "bid": 150.20,
+                                "ask": 150.30,
+                                ...
+                            }
+                        }
+                    }
+                }
+            }
+        """
+        query = """
+        subscription QuoteV2BySecurityIdStream($id: ID!, $currency: Currency = null) {
+          securityQuoteUpdates(id: $id) {
+            id
+            quoteV2(currency: $currency) {
+              __typename
+              securityId
+              ask
+              bid
+              currency
+              price
+              sessionPrice
+              quotedAsOf
+              ... on EquityQuote {
+                marketStatus
+                askSize
+                bidSize
+                close
+                high
+                last
+                lastSize
+                low
+                open
+                mid
+                volume: vol
+                referenceClose
+                __typename
+              }
+              ... on OptionQuote {
+                marketStatus
+                askSize
+                bidSize
+                close
+                high
+                last
+                lastSize
+                low
+                open
+                mid
+                volume: vol
+                breakEven
+                inTheMoney
+                liquidityStatus
+                openInterest
+                underlyingSpot
+                __typename
+              }
+            }
+            __typename
+          }
+        }
+        """
+        
+        # Create tasks for each security subscription
+        async def stream_single(security_id: str):
+            async for msg in self._subscribe(
+                "QuoteV2BySecurityIdStream",
+                query,
+                {"id": security_id, "currency": currency}
+            ):
+                yield msg
+        
+        # If only one security, stream directly
+        if len(security_ids) == 1:
+            async for msg in stream_single(security_ids[0]):
+                yield msg
+        else:
+            # Multiple securities - merge streams
+            queues = [stream_single(sid) for sid in security_ids]
+            # Note: For simplicity, we stream them sequentially in this implementation
+            # A more advanced implementation could merge streams concurrently
+            for queue in queues:
+                async for msg in queue:
+                    yield msg
+    
+    async def stream_activity_updates(self) -> AsyncIterator[Dict]:
+        """
+        Stream activity feed updates.
+        
+        Yields:
+            Activity update messages with structure:
+            {
+                "type": "next",
+                "id": "subscription-id",
+                "payload": {
+                    "data": {
+                        "activityFeedUpdates": {
+                            "accountId": "tfsa-xxxxx",
+                            "activityId": "activity-xxxxx",
+                            "updatedAt": "2025-10-31T...",
+                            "__typename": "ActivityFeedUpdate"
+                        }
+                    }
+                }
+            }
+        """
+        query = """
+        subscription ActivityFeedUpdate {
+          activityFeedUpdates {
+            accountId
+            activityId
+            updatedAt
+            __typename
+          }
+        }
+        """
+        
+        async for msg in self._subscribe("ActivityFeedUpdate", query):
+            yield msg
+    
+    async def stream_identity_updates(self, identity_id: Optional[str] = None) -> AsyncIterator[Dict]:
+        """
+        Stream identity and account core updates.
+        
+        Args:
+            identity_id: Identity ID (uses instance identity_id if not provided)
+            
+        Yields:
+            Identity/account update messages
+        """
+        if not identity_id:
+            identity_id = self.identity_id
+        
+        if not identity_id:
+            raise Exception("identity_id is required for identity updates subscription")
+        
+        query = """
+        subscription IdentityAccountCoreUpdates($identityId: ID!) {
+          identityAccountCoreUpdates(identityId: $identityId) {
+            __typename
+            ... on AccountUpdate {
+              id
+              eventName
+              __typename
+            }
+            ... on IdentityUpdate {
+              id
+              eventName
+              __typename
+            }
+          }
+        }
+        """
+        
+        async for msg in self._subscribe(
+            "IdentityAccountCoreUpdates",
+            query,
+            {"identityId": identity_id}
+        ):
+            yield msg
+    
+    async def stream_balance_changes(self, custodian_account_ids: List[str]) -> AsyncIterator[Dict]:
+        """
+        Stream custodian account cash balance changes.
+        
+        Args:
+            custodian_account_ids: List of custodian account IDs
+            
+        Yields:
+            Balance change messages
+        """
+        query = """
+        subscription CustodianAccountBalanceChanges($custodianAccountIds: [ID!]!) {
+          custodianAccountCashBalanceChanges(custodianAccountIds: $custodianAccountIds) {
+            id
+            __typename
+          }
+        }
+        """
+        
+        async for msg in self._subscribe(
+            "CustodianAccountBalanceChanges",
+            query,
+            {"custodianAccountIds": custodian_account_ids}
+        ):
+            yield msg
+    
+    async def ping(self) -> None:
+        """Send a ping message to keep the connection alive."""
+        await self._send_message({"type": "ping", "payload": {}})
 
 
 # ==================== Helper Functions ====================
