@@ -108,6 +108,7 @@
 
 - Python 3.7 or higher
 - `requests` library
+- `keyring` library (optional but recommended, for secure token storage)
 - `websockets` library (optional, required for subscription features)
 
 ### Install Dependencies
@@ -115,6 +116,9 @@
 ```bash
 # Core dependencies
 pip install requests
+
+# For secure token storage (highly recommended)
+pip install keyring
 
 # For WebSocket subscriptions (optional but recommended)
 pip install websockets
@@ -214,6 +218,46 @@ ws = WealthsimpleV2(
 )
 ```
 
+### Token Persistence
+
+**After successful authentication, tokens are automatically saved securely using the `keyring` library** (if available), which stores credentials in your operating system's secure credential storage:
+
+- **macOS**: Keychain
+- **Windows**: Credential Locker
+- **Linux**: Secret Service / KWallet
+
+**Benefits:**
+
+- 🔒 Tokens are encrypted by the operating system
+- 🔄 Tokens persist across terminal sessions and reboots
+- 🛡️ More secure than plain text environment variables
+- 🚀 Automatic loading on subsequent runs
+
+**Fallback:** If `keyring` is not installed, tokens are saved to environment variables (`WS_ACCESS_TOKEN` and `WS_REFRESH_TOKEN`) for the current session only.
+
+```python
+# First time - authenticate with credentials
+ws = WealthsimpleV2(username='your@email.com', password='yourpassword')
+# Tokens are now securely saved to keyring (and environment variables as fallback)
+
+# Later - even in a new terminal/session - tokens are auto-loaded
+ws = WealthsimpleV2()  # Automatically uses saved tokens from keyring
+```
+
+**Token storage priority:**
+
+1. **Keyring** (secure OS credential storage) - checked first
+2. **Environment variables** - fallback if keyring unavailable
+3. **Manual tokens** - if provided explicitly
+
+### Logout / Clear Tokens
+
+To clear all stored tokens:
+
+```python
+ws.logout()  # Clears tokens from keyring, environment, and instance
+```
+
 ### Automatic Token Refresh
 
 The client automatically refreshes expired access tokens:
@@ -223,6 +267,8 @@ The client automatically refreshes expired access tokens:
 accounts = ws.get_accounts()  # Token is auto-refreshed if expired
 ```
 
+When tokens are refreshed, both keyring and environment variables are automatically updated.
+
 ### Manual Token Refresh
 
 If needed, you can manually refresh:
@@ -231,6 +277,7 @@ If needed, you can manually refresh:
 success = ws.refresh_access_token()
 if success:
     print("Token refreshed successfully")
+    # Keyring and environment variables are automatically updated
 ```
 
 ---
@@ -872,16 +919,6 @@ python interactive_trade.py
 
 ### Usage
 
-```bash
-# Set environment variables (optional)
-export WS_USERNAME='your@email.com'
-export WS_PASSWORD='yourpassword'
-export WS_OTP='123456'
-
-# Run the interactive tool
-python interactive_trade.py
-```
-
 The script will guide you through:
 
 1. **Authentication** - Login with your credentials
@@ -1132,15 +1169,24 @@ except Exception as e:
 
 ### Token Management
 
-```python
-# Save tokens for reuse
-ws = WealthsimpleV2(username='your@email.com', password='yourpassword')
-access_token = ws.access_token
-refresh_token = ws.refresh_token
+Tokens are automatically saved to and loaded from keyring (secure OS credential storage):
 
-# Later, reuse tokens
-ws = WealthsimpleV2(access_token=access_token, refresh_token=refresh_token)
+```python
+# Authenticate once - tokens are securely saved to keyring
+ws = WealthsimpleV2(username='your@email.com', password='yourpassword')
+# Tokens stored in macOS Keychain / Windows Credential Locker / Linux Secret Service
+
+# Later sessions (even after reboot) - tokens are automatically loaded
+ws = WealthsimpleV2()  # Automatically uses saved tokens from keyring
+
+# Logout and clear all tokens
+ws.logout()  # Removes tokens from keyring and environment
+
+# Or manually provide tokens (overrides keyring and environment variables)
+ws = WealthsimpleV2(access_token='your_token', refresh_token='your_refresh')
 ```
+
+**Security Note:** Using `keyring` is highly recommended as it provides OS-level encryption and secure storage. Tokens are never stored in plain text files.
 
 ---
 
@@ -1163,10 +1209,11 @@ ws = WealthsimpleV2(
 
 #### Authentication Methods
 
-| Method                                       | Description                         |
-| -------------------------------------------- | ----------------------------------- |
-| `authenticate(username, password, otp=None)` | Authenticate with username/password |
-| `refresh_access_token()`                     | Manually refresh the access token   |
+| Method                                       | Description                                   |
+| -------------------------------------------- | --------------------------------------------- |
+| `authenticate(username, password, otp=None)` | Authenticate with username/password           |
+| `refresh_access_token()`                     | Manually refresh the access token             |
+| `logout()`                                   | Clear all tokens from keyring and environment |
 
 #### Security Methods
 

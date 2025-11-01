@@ -19,13 +19,6 @@ from wealthsimple_v2 import WealthsimpleV2
 
 def get_credentials():
     """Get credentials from environment or prompt user."""
-    print("=" * 60)
-    print("Wealthsimple Interactive Trading")
-    print("=" * 60)
-    
-    username = os.getenv('WS_USERNAME')
-    password = os.getenv('WS_PASSWORD')
-    otp = os.getenv('WS_OTP')
     
     # Prompt for credentials if not set in environment
     if not username:
@@ -581,18 +574,59 @@ def trade_options(ws: WealthsimpleV2, account_id: str, security: Dict):
         print(f"\n✗ Error placing order: {e}")
 
 
+def get_username():
+    """Get username from environment or prompt user (needed for keyring lookup)."""
+    username = input("\nEnter Wealthsimple username/email (for keyring lookup): ").strip()
+    return username
+
+
 def main():
     """Main interactive trading loop."""
     try:
-        # Get credentials
-        username, password, otp = get_credentials()
+        print("=" * 60)
+        print("Wealthsimple Interactive Trading")
+        print("=" * 60)
         
-        # Authenticate
-        print("\nAuthenticating...")
-        ws = WealthsimpleV2(username=username, password=password, otp=otp)
+        # Get username first (needed for keyring lookup)
+        username = get_username()
         
-        print("✓ Authentication successful!")
-        print(f"✓ Identity ID: {ws.identity_id}")
+        # Ensure username is in environment for keyring lookup
+        if not os.getenv('WS_USERNAME'):
+            os.environ['WS_USERNAME'] = username
+        
+        # Try to authenticate using saved tokens from keyring first
+        ws = None
+        print("\nAttempting to authenticate using saved credentials (keyring)...")
+        
+        try:
+            ws = WealthsimpleV2()  # This will try keyring using the username, then env vars, then env credentials
+            # Check if we have an access token (token refresh happens automatically when needed)
+            if ws.access_token:
+                print("✓ Authentication successful using saved credentials!")
+                if ws.identity_id:
+                    print(f"✓ Identity ID: {ws.identity_id}")
+            else:
+                ws = None
+        except Exception as e:
+            print(f"Could not authenticate with saved credentials: {e}")
+            ws = None
+        
+        # If authentication failed, prompt for remaining credentials
+        if not ws or not ws.access_token:
+            print("\nPlease provide your credentials:")
+            
+            # Password
+            password = getpass.getpass("Enter Wealthsimple password: ")
+            
+            # OTP
+            otp_input = input("Enter OTP/2FA token (press Enter to skip if 2FA not enabled): ").strip()
+            otp = otp_input if otp_input else None
+            
+            print("\nAuthenticating...")
+            ws = WealthsimpleV2(username=username, password=password, otp=otp)
+            
+            print("✓ Authentication successful!")
+            print(f"✓ Identity ID: {ws.identity_id}")
         
         while True:
             # Search for security

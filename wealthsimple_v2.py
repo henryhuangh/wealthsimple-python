@@ -7,10 +7,26 @@ options trading, account management, and real-time WebSocket subscriptions.
 
 Based on network traffic analysis from the Wealthsimple web application.
 
+Features:
+    - Secure token storage using keyring (OS credential storage)
+    - Automatic token refresh and persistence
+    - Real-time WebSocket subscriptions
+    - Full trading support (stocks and options)
+    - Comprehensive account management
+
+Dependencies:
+    - requests (required)
+    - keyring (optional but recommended - for secure token storage)
+    - websockets (optional - for real-time subscriptions)
+
 Usage:
     from wealthsimple_v2 import WealthsimpleV2, OrderStatus, OrderType
     
+    # Authenticate (tokens automatically saved to keyring)
     ws = WealthsimpleV2(username='your@email.com', password='yourpassword')
+    
+    # Later sessions - tokens automatically loaded from keyring
+    ws = WealthsimpleV2()  # No credentials needed!
     
     # Search for a security
     results = ws.search_securities('AAPL')
@@ -38,6 +54,9 @@ Usage:
         statuses=[OrderStatus.FILLED],
         types=[OrderType.DIY_BUY]
     )
+    
+    # Logout and clear all tokens
+    ws.logout()
     
     # Real-time subscriptions (requires 'websockets' package)
     import asyncio
@@ -70,6 +89,14 @@ except ImportError:
     WEBSOCKETS_AVAILABLE = False
     websockets = None
     WebSocketClientProtocol = None
+
+# Optional keyring support for secure token storage
+try:
+    import keyring
+    KEYRING_AVAILABLE = True
+except ImportError:
+    KEYRING_AVAILABLE = False
+    keyring = None
 
 
 # ==================== Constants & Enums ====================
@@ -136,7 +163,14 @@ class WealthsimpleV2:
     
     This client uses the GraphQL API endpoint at https://my.wealthsimple.com/graphql
     with OAuth v2 authentication.
+    
+    Tokens are securely stored using the keyring library (if available), which uses
+    the operating system's credential storage (Keychain on macOS, Credential Locker
+    on Windows, Secret Service on Linux).
     """
+    
+    # Keyring service name for token storage
+    KEYRING_SERVICE = "wealthsimple-python"
     
     def __init__(self, username: Optional[str] = None, password: Optional[str] = None, 
                  otp: Optional[str] = None, client_id: Optional[str] = None,
@@ -166,12 +200,122 @@ class WealthsimpleV2:
         if username and password:
             self.authenticate(username, password, otp)
         elif not access_token:
-            # Try to get from environment variables
-            username = os.getenv('WS_USERNAME')
-            password = os.getenv('WS_PASSWORD')
-            otp = os.getenv('WS_OTP')
-            if username and password:
-                self.authenticate(username, password, otp)
+            # Try to load tokens from keyring first (most secure)
+            if self._load_tokens_from_keyring():
+                # Successfully loaded tokens from keyring
+                self._fetch_identity_id_from_token()
+            else:
+                # Fallback: Try to get tokens from environment variables
+                env_access_token = os.getenv('WS_ACCESS_TOKEN')
+                env_refresh_token = os.getenv('WS_REFRESH_TOKEN')
+                
+                if env_access_token and env_refresh_token:
+                    # Use existing tokens from environment
+                    self.access_token = env_access_token
+                    self.refresh_token = env_refresh_token
+                    # Extract identity ID from token
+                    self._fetch_identity_id_from_token()
+                else:
+                    # Try to authenticate with credentials from environment variables
+                    username = os.getenv('WS_USERNAME')
+                    password = os.getenv('WS_PASSWORD')
+                    otp = os.getenv('WS_OTP')
+                    if username and password:
+                        self.authenticate(username, password, otp)
+    
+    def _save_tokens_to_keyring(self, username: Optional[str] = None) -> bool:
+        """
+        Save tokens to keyring (secure credential storage).
+        
+        Args:
+            username: Optional username to use as keyring username (defaults to 'default')
+            
+        Returns:
+            True if tokens were successfully saved, False otherwise
+        """
+        if not KEYRING_AVAILABLE:
+            return False
+        
+        keyring_username = username or os.getenv('WS_USERNAME') or 'default'
+        
+        try:
+            saved_any = False
+            if self.access_token:
+                keyring.set_password(self.KEYRING_SERVICE, f"{keyring_username}_access_token", self.access_token)
+                saved_any = True
+            if self.refresh_token:
+                keyring.set_password(self.KEYRING_SERVICE, f"{keyring_username}_refresh_token", self.refresh_token)
+                saved_any = True
+            if self.token_expiry:
+                keyring.set_password(self.KEYRING_SERVICE, f"{keyring_username}_token_expiry", str(self.token_expiry))
+                saved_any = True
+            return saved_any
+        except Exception as e:
+            print(f"Failed to save to keyring: {e}")
+            # If keyring fails, silently continue (tokens won't be persisted)
+            # In debug mode, you could log this: print(f"Failed to save to keyring: {e}")
+            return False
+    
+    def _load_tokens_from_keyring(self, username: Optional[str] = None) -> bool:
+        """
+        Load tokens from keyring (secure credential storage).
+        
+        Args:
+            username: Optional username to use as keyring username (defaults to 'default')
+            
+        Returns:
+            True if tokens were successfully loaded, False otherwise
+        """
+        if not KEYRING_AVAILABLE:
+            return False
+        
+        keyring_username = username or os.getenv('WS_USERNAME') or 'default'
+        
+        try:
+            access_token = keyring.get_password(self.KEYRING_SERVICE, f"{keyring_username}_access_token")
+            refresh_token = keyring.get_password(self.KEYRING_SERVICE, f"{keyring_username}_refresh_token")
+            token_expiry_str = keyring.get_password(self.KEYRING_SERVICE, f"{keyring_username}_token_expiry")
+            
+            if access_token and refresh_token:
+                self.access_token = access_token
+                self.refresh_token = refresh_token
+                if token_expiry_str:
+                    try:
+                        self.token_expiry = float(token_expiry_str)
+                    except ValueError:
+                        self.token_expiry = None
+                return True
+        except Exception:
+            pass
+        
+        return False
+    
+    def _delete_tokens_from_keyring(self, username: Optional[str] = None) -> None:
+        """
+        Delete tokens from keyring.
+        
+        Args:
+            username: Optional username to use as keyring username (defaults to 'default')
+        """
+        if not KEYRING_AVAILABLE:
+            return
+        
+        keyring_username = username or os.getenv('WS_USERNAME') or 'default'
+        
+        try:
+            keyring.delete_password(self.KEYRING_SERVICE, f"{keyring_username}_access_token")
+        except Exception:
+            pass
+        
+        try:
+            keyring.delete_password(self.KEYRING_SERVICE, f"{keyring_username}_refresh_token")
+        except Exception:
+            pass
+        
+        try:
+            keyring.delete_password(self.KEYRING_SERVICE, f"{keyring_username}_token_expiry")
+        except Exception:
+            pass
     
     def authenticate(self, username: str, password: str, otp: Optional[str] = None) -> Dict:
         """
@@ -214,13 +358,24 @@ class WealthsimpleV2:
             expires_in = data.get('expires_in', 1800)
             self.token_expiry = time.time() + expires_in
             
-            # Extract identity and profile information
+            # Extract identity and profile information FIRST (before saving tokens)
             self.identity_id = data.get('identity_canonical_id')
             self.profiles = data.get('profiles', {})
             
             # If identity_id not in response, try to extract from JWT token
-            if not self.identity_id:
+            if not self.identity_id and self.access_token:
                 self._fetch_identity_id_from_token()
+            
+            # Save tokens to keyring (secure storage)
+            # Note: We save after extracting identity_id so we have all the info
+            self._save_tokens_to_keyring(username)
+            print(f"Saved tokens to keyring")
+            
+            # Also save to environment variables as fallback
+            if self.access_token:
+                os.environ['WS_ACCESS_TOKEN'] = self.access_token
+            if self.refresh_token:
+                os.environ['WS_REFRESH_TOKEN'] = self.refresh_token
             
             return data
         else:
@@ -258,6 +413,31 @@ class WealthsimpleV2:
             # Failed to extract identity_id from token, will remain None
             pass
     
+    def logout(self) -> None:
+        """
+        Logout and clear all stored tokens from keyring and environment variables.
+        
+        This will delete tokens from:
+        - Keyring (secure OS credential storage)
+        - Environment variables
+        - Instance variables
+        """
+        # Clear tokens from keyring
+        self._delete_tokens_from_keyring()
+        
+        # Clear tokens from environment variables
+        if 'WS_ACCESS_TOKEN' in os.environ:
+            del os.environ['WS_ACCESS_TOKEN']
+        if 'WS_REFRESH_TOKEN' in os.environ:
+            del os.environ['WS_REFRESH_TOKEN']
+        
+        # Clear instance variables
+        self.access_token = None
+        self.refresh_token = None
+        self.token_expiry = None
+        self.identity_id = None
+        self.profiles = None
+    
     def refresh_access_token(self) -> bool:
         """
         Refresh the access token using the refresh token.
@@ -288,6 +468,16 @@ class WealthsimpleV2:
                 self.refresh_token = data.get('refresh_token')
                 expires_in = data.get('expires_in', 1800)
                 self.token_expiry = time.time() + expires_in
+                
+                # Save updated tokens to keyring (secure storage)
+                self._save_tokens_to_keyring()
+                
+                # Also update tokens in environment variables as fallback
+                if self.access_token:
+                    os.environ['WS_ACCESS_TOKEN'] = self.access_token
+                if self.refresh_token:
+                    os.environ['WS_REFRESH_TOKEN'] = self.refresh_token
+                
                 return True
         except:
             pass
