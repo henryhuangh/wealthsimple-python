@@ -175,27 +175,6 @@ order = ws.limit_buy(
 print(f"Order placed: {order['orderId']}")
 ```
 
-### Using Environment Variables
-
-For better security, store credentials in environment variables:
-
-```bash
-export WS_USERNAME='your@email.com'
-export WS_PASSWORD='yourpassword'
-export WS_OTP='123456'  # Optional
-```
-
-Then initialize without parameters:
-
-```python
-from wealthsimple_v2 import WealthsimpleV2
-
-# Credentials are read from environment variables
-ws = WealthsimpleV2()
-```
-
----
-
 ## 🔐 Authentication
 
 ### Basic Authentication
