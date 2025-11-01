@@ -17,29 +17,6 @@ from typing import Optional, List, Dict
 from wealthsimple_v2 import WealthsimpleV2
 
 
-def get_credentials():
-    """Get credentials from environment or prompt user."""
-    
-    # Prompt for credentials if not set in environment
-    if not username:
-        username = input("\nEnter Wealthsimple username/email: ")
-    else:
-        print(f"\nUsing username from environment: {username}")
-    
-    if not password:
-        password = getpass.getpass("Enter Wealthsimple password: ")
-    else:
-        print("Using password from environment")
-    
-    if not otp:
-        otp_input = input("Enter OTP/2FA token (press Enter to skip if 2FA not enabled): ").strip()
-        otp = otp_input if otp_input else None
-    else:
-        print("Using OTP from environment")
-    
-    return username, password, otp
-
-
 def search_securities(ws: WealthsimpleV2):
     """Allow user to search for securities."""
     print("\n" + "=" * 60)
@@ -574,12 +551,6 @@ def trade_options(ws: WealthsimpleV2, account_id: str, security: Dict):
         print(f"\n✗ Error placing order: {e}")
 
 
-def get_username():
-    """Get username from environment or prompt user (needed for keyring lookup)."""
-    username = input("\nEnter Wealthsimple username/email (for keyring lookup): ").strip()
-    return username
-
-
 def main():
     """Main interactive trading loop."""
     try:
@@ -587,19 +558,12 @@ def main():
         print("Wealthsimple Interactive Trading")
         print("=" * 60)
         
-        # Get username first (needed for keyring lookup)
-        username = get_username()
-        
-        # Ensure username is in environment for keyring lookup
-        if not os.getenv('WS_USERNAME'):
-            os.environ['WS_USERNAME'] = username
-        
         # Try to authenticate using saved tokens from keyring first
         ws = None
         print("\nAttempting to authenticate using saved credentials (keyring)...")
         
         try:
-            ws = WealthsimpleV2()  # This will try keyring using the username, then env vars, then env credentials
+            ws = WealthsimpleV2()  # This will try keyring first, then env vars, then env credentials
             # Check if we have an access token (token refresh happens automatically when needed)
             if ws.access_token:
                 print("✓ Authentication successful using saved credentials!")
@@ -611,9 +575,12 @@ def main():
             print(f"Could not authenticate with saved credentials: {e}")
             ws = None
         
-        # If authentication failed, prompt for remaining credentials
+        # If authentication failed, prompt for all credentials
         if not ws or not ws.access_token:
             print("\nPlease provide your credentials:")
+            
+            # Username
+            username = input("Enter Wealthsimple username/email: ").strip()
             
             # Password
             password = getpass.getpass("Enter Wealthsimple password: ")

@@ -368,7 +368,7 @@ class WealthsimpleV2:
             
             # Save tokens to keyring (secure storage)
             # Note: We save after extracting identity_id so we have all the info
-            self._save_tokens_to_keyring(username)
+            self._save_tokens_to_keyring('default')
             print(f"Saved tokens to keyring")
             
             # Also save to environment variables as fallback
