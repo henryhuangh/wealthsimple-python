@@ -470,6 +470,29 @@ order = ws.create_order(
 )
 ```
 
+#### Cancel Orders
+
+```python
+# Place an order and get the external ID
+order = ws.limit_buy(
+    account_id=account_id,
+    security_id=security_id,
+    quantity=5,
+    limit_price=150.00
+)
+
+# Get the external ID from the order response
+external_id = order.get('externalCanonicalId') or order.get('externalId')
+if external_id:
+    # Cancel the order
+    cancel_response = ws.cancel_order(external_id)
+    print(f"Order {external_id} cancelled successfully")
+else:
+    print("Could not find external ID in order response")
+```
+
+**Note:** The `external_id` is the unique identifier for the order (typically in the format `order-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`). It is returned in the order response when you create an order, or can be retrieved from pending orders or activity history.
+
 ### Options Trading
 
 #### Get Option Expiry Dates
@@ -1214,15 +1237,16 @@ ws = WealthsimpleV2(
 
 #### Stock Trading Methods
 
-| Method                                                                        | Description             |
-| ----------------------------------------------------------------------------- | ----------------------- |
-| `market_buy(account_id, security_id, quantity)`                               | Place market buy order  |
-| `market_sell(account_id, security_id, quantity)`                              | Place market sell order |
-| `limit_buy(account_id, security_id, quantity, limit_price)`                   | Place limit buy order   |
-| `limit_sell(account_id, security_id, quantity, limit_price)`                  | Place limit sell order  |
-| `stop_limit_buy(account_id, security_id, quantity, limit_price, stop_price)`  | Place stop-limit buy    |
-| `stop_limit_sell(account_id, security_id, quantity, limit_price, stop_price)` | Place stop-limit sell   |
-| `create_order(account_id, security_id, quantity, ...)`                        | Create custom order     |
+| Method                                                                        | Description              |
+| ----------------------------------------------------------------------------- | ------------------------ |
+| `market_buy(account_id, security_id, quantity)`                               | Place market buy order   |
+| `market_sell(account_id, security_id, quantity)`                              | Place market sell order  |
+| `limit_buy(account_id, security_id, quantity, limit_price)`                   | Place limit buy order    |
+| `limit_sell(account_id, security_id, quantity, limit_price)`                  | Place limit sell order   |
+| `stop_limit_buy(account_id, security_id, quantity, limit_price, stop_price)`  | Place stop-limit buy     |
+| `stop_limit_sell(account_id, security_id, quantity, limit_price, stop_price)` | Place stop-limit sell    |
+| `create_order(account_id, security_id, quantity, ...)`                        | Create custom order      |
+| `cancel_order(external_id)`                                                   | Cancel an existing order |
 
 #### Options Trading Methods
 
