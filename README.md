@@ -41,7 +41,6 @@
 - [Advanced Usage](#advanced-usage)
 - [API Reference](#api-reference)
 - [Contributing](#contributing)
-- [License](#license)
 - [Legacy API](#legacy-api)
 
 ---
@@ -1294,16 +1293,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
 ## 🔗 Resources
 
-- **API Documentation**: See `API_V2_SUMMARY.md` for detailed API information
-- **Examples**: See `EXAMPLES_V2.md` for comprehensive usage examples
+- **API Documentation**: See `README.md` for detailed API information
 - **Wealthsimple**: [https://www.wealthsimple.com/](https://www.wealthsimple.com/)
 
 ---
