@@ -1266,19 +1266,31 @@ class WealthsimpleV2:
         return result.get('data', {}).get('accounts', [])
     
     def get_positions(self, identity_id: Optional[str] = None, account_ids: Optional[List[str]] = None,
-                     currency: str = 'CAD', security_type: Optional[str] = None) -> List[Dict]:
+                     currency: Optional[str] = None, security_type: Optional[str] = None,
+                     include_security: bool = True, first: int = 500, aggregated: bool = False) -> List[Dict]:
         """
         Get positions for the authenticated user.
         
         Args:
             identity_id: Optional identity ID (uses authenticated user's ID if not provided)
             account_ids: Optional list of account IDs to filter by
-            currency: Currency for position values
+            currency: Currency for position values (default: None). If not set, currency_override is set to 'MARKET'
             security_type: Optional security type filter ('EQUITY', 'OPTION', 'CRYPTO')
+            include_security: Include full security details in response
+            first: Maximum number of positions to return
+            aggregated: Whether to aggregate positions across accounts
             
         Returns:
             List of positions
         """
+        # Set currency_override based on currency: if currency not set, use 'MARKET', otherwise None
+        if currency is None:
+            currency_override = 'MARKET'
+            # If currency is not provided, default to 'CAD' for GraphQL query (required field)
+            currency = 'CAD'
+        else:
+            currency_override = None
+        
         if not identity_id:
             identity_id = self.identity_id
         
@@ -1291,13 +1303,15 @@ class WealthsimpleV2:
             raise Exception("No identity ID available. Please authenticate first.")
         
         gql_query = """
-        query FetchIdentityPositions($identityId: ID!, $currency: Currency!, $accountIds: [ID!], 
-                                     $filter: PositionFilter) {
+        query FetchIdentityPositions($identityId: ID!, $currency: Currency!, $first: Int, $cursor: String, 
+                                     $accountIds: [ID!], $aggregated: Boolean, $currencyOverride: CurrencyOverride, 
+                                     $filter: PositionFilter, $includeSecurity: Boolean = false) {
           identity(id: $identityId) {
             id
             financials(filter: {accounts: $accountIds}) {
               current(currency: $currency) {
-                positions(filter: $filter) {
+                id
+                positions(first: $first, after: $cursor, aggregated: $aggregated, filter: $filter) {
                   edges {
                     node {
                       id
@@ -1307,40 +1321,102 @@ class WealthsimpleV2:
                       bookValue {
                         amount
                         currency
+                        __typename
                       }
                       averagePrice {
                         amount
                         currency
+                        __typename
                       }
-                      totalValue {
+                      marketAveragePrice: averagePrice(currencyOverride: $currencyOverride) {
                         amount
                         currency
+                        __typename
+                      }
+                      marketBookValue: bookValue(currencyOverride: $currencyOverride) {
+                        amount
+                        currency
+                        __typename
+                      }
+                      totalValue(currencyOverride: $currencyOverride) {
+                        amount
+                        currency
+                        __typename
                       }
                       unrealizedReturns {
                         amount
                         currency
+                        __typename
+                      }
+                      marketUnrealizedReturns: unrealizedReturns(currencyOverride: $currencyOverride) {
+                        amount
+                        currency
+                        __typename
                       }
                       security {
                         id
                         securityType
-                        stock {
+                        currency
+                        status
+                        logoUrl
+                        features
+                        stock @include(if: $includeSecurity) {
                           name
                           symbol
                           primaryExchange
+                          primaryMic
+                          __typename
                         }
-                        optionDetails {
+                        optionDetails @include(if: $includeSecurity) {
                           strikePrice
                           optionType
                           expiryDate
                           osiSymbol
+                          multiplier
+                          maturity
+                          underlyingSecurity {
+                            id
+                            stock {
+                              name
+                              symbol
+                              primaryExchange
+                              __typename
+                            }
+                            __typename
+                          }
+                          __typename
                         }
+                        quoteV2(currency: null) @include(if: $includeSecurity) {
+                          securityId
+                          currency
+                          price
+                          sessionPrice
+                          ask
+                          bid
+                          quotedAsOf
+                          previousBaseline
+                          __typename
+                        }
+                        __typename
                       }
+                      __typename
                     }
+                    __typename
+                  }
+                  pageInfo {
+                    hasNextPage
+                    endCursor
+                    __typename
                   }
                   totalCount
+                  status
+                  __typename
                 }
+                __typename
               }
+              __typename
             }
+            __typename
           }
         }
         """
@@ -1352,8 +1428,13 @@ class WealthsimpleV2:
         variables = {
             "identityId": identity_id,
             "currency": currency,
+            "currencyOverride": currency_override,
             "accountIds": account_ids,
-            "filter": position_filter if position_filter else None
+            "filter": position_filter if position_filter else None,
+            "first": first,
+            "aggregated": aggregated,
+            "includeSecurity": include_security,
+            "cursor": None
         }
         
         result = self.graphql_query("FetchIdentityPositions", gql_query, variables)

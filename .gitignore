@@ -1,6 +1,6 @@
 data
 .env
-test
+test.py
 notes.md
 __pycache__
 trading
