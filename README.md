@@ -36,12 +36,12 @@
   - [Options Trading](#options-trading)
   - [Activity & History](#activity--history)
   - [Real-Time WebSocket Subscriptions](#real-time-websocket-subscriptions)
-- [Interactive Trading Tool](#interactive-trading-tool)
-- [Examples](#examples)
-- [Advanced Usage](#advanced-usage)
-- [API Reference](#api-reference)
-- [Contributing](#contributing)
-- [Legacy API](#legacy-api)
+- [Interactive Trading Tool](#-interactive-trading-tool-1)
+- [Examples](#-examples)
+- [Advanced Usage](#-advanced-usage)
+- [API Reference](#-api-reference)
+- [Contributing](#-contributing)
+- [Legacy API](#-legacy-api)
 
 ---
 
