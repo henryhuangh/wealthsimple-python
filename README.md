@@ -49,18 +49,18 @@
 
 ### 🔐 Authentication
 
-- ✅ OAuth v2 authentication with automatic token refresh
-- ✅ Support for 2FA/OTP
-- ✅ Environment variable support for secure credential storage
-- ✅ Token expiry management and auto-refresh
+- OAuth v2 authentication with automatic token refresh
+- Support for 2FA/OTP
+- Environment variable support for secure credential storage
+- Token expiry management and auto-refresh
 
 ### 📊 Market Data
 
-- ✅ Security search by ticker symbol or company name
-- ✅ Real-time quotes with bid/ask spreads
-- ✅ Detailed security information (fundamentals, market status)
-- ✅ Support for stocks across multiple exchanges (NASDAQ, NYSE, TSX, etc.)
-- ✅ **WebSocket subscriptions for real-time streaming data**
+- Security search by ticker symbol or company name
+- Real-time quotes with bid/ask spreads
+- Detailed security information (fundamentals, market status)
+- Support for stocks across multiple exchanges (NASDAQ, NYSE, TSX, etc.)
+- **WebSocket subscriptions for real-time streaming data**
   - Real-time security quote updates
   - Activity feed notifications
   - Account balance change alerts
@@ -68,36 +68,36 @@
 
 ### 💼 Account Management
 
-- ✅ Retrieve all accounts (Personal, TFSA, RRSP, etc.)
-- ✅ Account balances and buying power
-- ✅ Current positions with unrealized P/L
-  - ✅ Activity feed and order history
+- Retrieve all accounts (Personal, TFSA, RRSP, etc.)
+- Account balances and buying power
+- Current positions with unrealized P/L
+  - Activity feed and order history
 
 ### 📈 Stock Trading
 
-- ✅ Market orders (buy/sell)
-- ✅ Limit orders (buy/sell)
-- ✅ Stop-limit orders (buy/sell)
-- ✅ Good-Till-Cancelled (GTC) and Day orders
-- ✅ Custom order creation
+- Market orders (buy/sell)
+- Limit orders (buy/sell)
+- Stop-limit orders (buy/sell)
+- Good-Till-Cancelled (GTC) and Day orders
+- Custom order creation
 
 ### 📉 Options Trading
 
-- ✅ Full option chain retrieval
-- ✅ Available expiry dates
-- ✅ Option greeks (delta, gamma, theta, vega, rho)
-- ✅ Implied volatility
-- ✅ Buy to open/close
-- ✅ Sell to open/close (writing covered calls)
-- ✅ Transaction fee calculation
+- Full option chain retrieval
+- Available expiry dates
+- Option greeks (delta, gamma, theta, vega, rho)
+- Implied volatility
+- Buy to open/close
+- Sell to open/close (writing covered calls)
+- Transaction fee calculation
 
 ### 🎮 Interactive Trading Tool
 
-- ✅ Command-line interface for easy trading
-- ✅ Interactive security search
-- ✅ Real-time quote viewing
-- ✅ Order confirmation before execution
-- ✅ Support for both stocks and options
+- Command-line interface for easy trading
+- Interactive security search
+- Real-time quote viewing
+- Order confirmation before execution
+- Support for both stocks and options
 
 ---
 
