@@ -1767,6 +1767,25 @@ class WealthsimpleV2:
         return self.create_order(account_id, option_id, quantity, 'SELL_QUANTITY', 'LIMIT',
                                limit_price=limit_price, open_close=open_close)
     
+    def stop_limit_sell_option(self, account_id: str, option_id: str, quantity: int,
+                              limit_price: float, stop_price: float, open_close: str = 'CLOSE') -> Dict:
+        """
+        Place a stop-limit sell order for an option contract (for stop-loss protection).
+        
+        Args:
+            account_id: Account ID
+            option_id: Option security ID
+            quantity: Number of contracts
+            limit_price: Limit price per contract (price to sell at once stop is triggered)
+            stop_price: Stop price (triggers the order when option price falls to this level)
+            open_close: 'CLOSE' to close an existing long position
+            
+        Returns:
+            Order creation response
+        """
+        return self.create_order(account_id, option_id, quantity, 'SELL_QUANTITY', 'STOP_LIMIT',
+                               limit_price=limit_price, stop_price=stop_price, open_close=open_close)
+    
     def cancel_order(self, external_id: str) -> Dict:
         """
         Cancel an existing order.
@@ -1811,6 +1830,89 @@ class WealthsimpleV2:
             raise Exception(f"Failed to cancel order: {'; '.join(error_messages)}")
         
         return cancel_response
+    
+    def get_extended_order(self, external_id: str, branch_id: str = 'TR') -> Dict:
+        """
+        Get extended order details including fill information and status.
+        
+        This provides detailed information about an order including:
+        - Fill prices and quantities
+        - Commission and fees
+        - Order status (posted, cancelled, pending)
+        - Submission and expiry times
+        - Exchange rates and net values
+        
+        Args:
+            external_id: The external order ID (e.g., 'order-da8e68b0-6a66-4783-b5a6-44e5efc30c3f')
+            branch_id: Branch ID (default: 'TR' for Trade account)
+            
+        Returns:
+            Extended order details dictionary containing:
+            - averageFilledPrice: Average price of filled orders
+            - filledQuantity: Quantity that has been filled
+            - filledCommissionFee: Commission fee for filled portion
+            - filledTotalFee: Total fees for filled portion
+            - status: Order status ('posted', 'cancelled', 'pending', etc.)
+            - limitPrice: Limit price if applicable
+            - stopPrice: Stop price if applicable
+            - orderType: Type of order (e.g., 'BUY_QUANTITY', 'SELL_QUANTITY')
+            - submittedQuantity: Originally submitted quantity
+            - submittedNetValue: Net value when submitted
+            - timeInForce: Time in force setting ('DAY', 'GTC', etc.)
+            - And many other fields
+            
+        Example:
+            order = ws.get_extended_order('order-fc166199-8832-49ba-832d-6a2b0065a2d7')
+            print(f"Status: {order['status']}")
+            print(f"Filled: {order['filledQuantity']} @ {order['averageFilledPrice']}")
+        """
+        gql_query = """
+        query FetchSoOrdersExtendedOrder($branchId: String!, $externalId: String!) {
+          soOrdersExtendedOrder(branchId: $branchId, externalId: $externalId) {
+            ...SoOrdersExtendedOrder
+            __typename
+          }
+        }
+        
+        fragment SoOrdersExtendedOrder on SoOrders_ExtendedOrderResponse {
+          averageFilledPrice
+          filledExchangeRate
+          filledQuantity
+          filledCommissionFee
+          filledTotalFee
+          firstFilledAtUtc
+          lastFilledAtUtc
+          limitPrice
+          openClose
+          orderType
+          optionMultiplier
+          rejectionCause
+          rejectionCode
+          securityCurrency
+          status
+          stopPrice
+          submittedAtUtc
+          submittedExchangeRate
+          submittedNetValue
+          submittedQuantity
+          submittedTotalFee
+          timeInForce
+          accountId
+          canonicalAccountId
+          cancellationCutoff
+          tradingSession
+          expiredAtUtc
+          __typename
+        }
+        """
+        
+        variables = {
+            "branchId": branch_id,
+            "externalId": external_id
+        }
+        
+        result = self.graphql_query("FetchSoOrdersExtendedOrder", gql_query, variables)
+        return result.get('data', {}).get('soOrdersExtendedOrder', {})
     
     # ==================== Identity & User Info ====================
     
